@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from urllib.parse import urlsplit
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +61,14 @@ def validate_env(v, root=ROOT):
     require(v.get("COOKIE_SAMESITE") == "lax" and v.get("COOKIE_NAME") == "refresh_token", "Contrato cookie incompatible")
     require(v.get("POSTGRES_HOST") == "postgres" and v.get("POSTGRES_PORT") == "5432" and not v.get("DATABASE_URL"), "Usar exclusivamente PostgreSQL interno")
     require(v.get("STORAGE_ROOT") == "/app/storage", "Storage incompatible")
-    require(not v.get("CORS_ALLOW_ORIGINS") and not v.get("CORS_ALLOW_ORIGIN_REGEX"), "El modelo usa same-origin")
+    require(not v.get("CORS_ALLOW_ORIGIN_REGEX"), "Usar orígenes HTTPS explícitos, no regex")
+    require(v.get("CORS_ALLOW_CREDENTIALS") == "true", "Pages requiere CORS credentials")
+    for origin in filter(None, (x.strip() for x in v.get("CORS_ALLOW_ORIGINS", "").split(","))):
+        parsed = urlsplit(origin)
+        require(parsed.scheme == "https" and parsed.hostname and "*" not in origin
+                and not parsed.username and not parsed.password and parsed.path in {"", "/"}
+                and not parsed.query and not parsed.fragment and origin == origin.rstrip("/"),
+                "CORS requiere orígenes HTTPS exactos sin comodines")
     require(len(v["JWT_ACCESS_SECRET"]) >= 32 and len(v["PUBLIC_TRACKING_HMAC_SECRET"]) >= 32, "Secretos cortos")
     require(len({v["POSTGRES_PASSWORD"], v["JWT_ACCESS_SECRET"], v["PUBLIC_TRACKING_HMAC_SECRET"]}) == 3, "Secretos deben ser independientes")
     require(re.fullmatch(r"[A-Za-z0-9_-]+", v["POSTGRES_PASSWORD"]), "La contraseña DB debe ser URL-safe; no rotar la existente automáticamente")

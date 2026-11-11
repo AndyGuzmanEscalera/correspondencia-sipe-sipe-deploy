@@ -117,6 +117,14 @@ class OperationsTests(unittest.TestCase):
     def test_complete_env(self):
         op.validate_env(self.v, self.root / "checkout")
 
+    def test_pages_exact_https_cors_origin_is_allowed(self):
+        op.validate_env({**self.v, "CORS_ALLOW_ORIGINS": "https://correspondencia.sipesipe.gob.bo"})
+
+    def test_unsafe_pages_cors_is_rejected(self):
+        for origin in ("*", "https://*.pages.dev", "http://example.com", "https://example.com/path", "https://user:secret@example.com"):
+            with self.subTest(origin=origin), self.assertRaises(op.Refusal):
+                op.validate_env({**self.v, "CORS_ALLOW_ORIGINS": origin})
+
     def test_missing_secret(self):
         for key in ("POSTGRES_PASSWORD", "JWT_ACCESS_SECRET", "PUBLIC_TRACKING_HMAC_SECRET"):
             v = {**self.v, key: ""}
