@@ -78,6 +78,42 @@ class OperationsTests(unittest.TestCase):
             self.assertEqual(dict(line.split("=", 1) for line in (ROOT / ".env.example").read_text().splitlines()
                                   if line and not line.startswith("#"))[key], "")
 
+    def test_adopt_requires_explicit_historical_volume_names(self):
+        v = {**self.v, "INSTALL_MODE": "adopt"}
+        with self.assertRaises(op.Refusal):
+            op.validate_env(v)
+        v.update(POSTGRES_VOLUME="correspondencia_sipe_sipe_postgres_data",
+                 STORAGE_VOLUME="correspondencia_sipe_sipe_backend_storage")
+        op.validate_env(v)
+
+    def test_demo_cannot_silently_adopt_history(self):
+        v = {**self.v, "POSTGRES_VOLUME": "correspondencia_sipe_sipe_postgres_data",
+             "STORAGE_VOLUME": "correspondencia_sipe_sipe_backend_storage"}
+        with self.assertRaises(op.Refusal):
+            op.validate_env(v)
+
+    def context_mode(self, mode):
+        root = self.root / "checkout"
+        root.mkdir()
+        (root / "release.json").write_text(json.dumps(self.m))
+        v = {**self.v, "INSTALL_MODE": mode}
+        if mode == "adopt":
+            v.update(POSTGRES_VOLUME="correspondencia_sipe_sipe_postgres_data",
+                     STORAGE_VOLUME="correspondencia_sipe_sipe_backend_storage")
+        envfile = root / ".env"
+        envfile.write_text("".join(k+"="+value+"\n" for k,value in v.items()))
+        envfile.chmod(0o600)
+        with patch.dict(op.os.environ, {"CORRESPONDENCIA_ENV_FILE": str(envfile)}):
+            return op.Context(root)
+
+    def test_adopt_context_includes_override(self):
+        c = self.context_mode("adopt")
+        self.assertIn(str(c.root / "docker-compose.adopt.yml"), c.base)
+
+    def test_demo_context_uses_only_base_compose(self):
+        c = self.context_mode("demo")
+        self.assertNotIn(str(c.root / "docker-compose.adopt.yml"), c.base)
+
     def test_complete_env(self):
         op.validate_env(self.v, self.root / "checkout")
 

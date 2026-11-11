@@ -88,8 +88,6 @@ networks:
     internal: true
 volumes:
   postgres_data:
-    external: true
-    name: ${POSTGRES_VOLUME:-correspondencia_sipe_sipe_postgres_data}
+    name: ${POSTGRES_VOLUME:-correspondencia_demo_postgres_data}
   backend_storage:
-    external: true
-    name: ${STORAGE_VOLUME:-correspondencia_sipe_sipe_backend_storage}
+    name: ${STORAGE_VOLUME:-correspondencia_demo_backend_storage}

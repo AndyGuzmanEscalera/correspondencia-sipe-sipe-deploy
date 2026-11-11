@@ -66,11 +66,14 @@ def validate_env(v, root=ROOT):
     require(re.fullmatch(r"[A-Za-z0-9_-]+", v["POSTGRES_PASSWORD"]), "La contraseña DB debe ser URL-safe; no rotar la existente automáticamente")
     for key in ("POSTGRES_DB", "POSTGRES_USER"):
         require(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,62}", v[key]), "Identificador DB inválido")
-    defaults = {"POSTGRES_VOLUME": "correspondencia_sipe_sipe_postgres_data", "STORAGE_VOLUME": "correspondencia_sipe_sipe_backend_storage"}
+    mode = v.setdefault("INSTALL_MODE", "demo")
+    require(mode in {"demo", "adopt"}, "INSTALL_MODE debe ser demo o adopt")
+    expected = ("correspondencia_demo_postgres_data", "correspondencia_demo_backend_storage") if mode == "demo" else ("correspondencia_sipe_sipe_postgres_data", "correspondencia_sipe_sipe_backend_storage")
+    defaults = dict(zip(("POSTGRES_VOLUME", "STORAGE_VOLUME"), expected))
     for key, default in defaults.items():
         v.setdefault(key, default)
         require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]+", v[key]), "Volumen inválido")
-    require(v["POSTGRES_VOLUME"] != v["STORAGE_VOLUME"], "Volúmenes deben ser distintos")
+    require((v["POSTGRES_VOLUME"], v["STORAGE_VOLUME"]) == expected, "Nombres de volúmenes incompatibles con INSTALL_MODE")
     backup = Path(v["BACKUP_ROOT"])
     require(backup.is_absolute() and backup.resolve() != root.resolve() and root.resolve() not in backup.resolve().parents, "Backups fuera de Git")
     require(v.get("MIN_FREE_GB", "5").isdigit() and int(v.get("MIN_FREE_GB", "5")) >= 1, "MIN_FREE_GB inválido")
@@ -88,6 +91,8 @@ class Context:
         self.base = ["docker", "compose", "--project-directory", str(self.root),
                      "--project-name", PROJECT, "--env-file", str(self.envfile),
                      "-f", str(self.root / "docker-compose.yml")]
+        if self.v["INSTALL_MODE"] == "adopt":
+            self.base += ["-f", str(self.root / "docker-compose.adopt.yml")]
 
     def run(self, args, *, output=None, input_stream=None, timeout=120, label="Comando"):
         try:

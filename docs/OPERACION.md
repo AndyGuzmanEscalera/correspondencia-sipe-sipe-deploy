@@ -1,3 +1,6 @@
+Primer corte DEMO limpio: usar FIRST_DEPLOY_DEMO.md y first_deploy_demo.sh.
+Este documento describe las actualizaciones posteriores y adopción revisada.
+
 # Operación
 
 1. PC: preparar desde el SHA develop esperado; validar runtime/build/smoke.

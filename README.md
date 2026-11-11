@@ -9,6 +9,7 @@ No hay publicación/descarga de imágenes privadas ni transportes de imágenes.
 ```text
 .env.example
 docker-compose.yml
+docker-compose.adopt.yml  # solo adopción futura de volúmenes externos
 release.json
 backend/                 # Dockerfile, app, Alembic, ini, requirements runtime
 web/
@@ -25,6 +26,14 @@ Cloudflare del host -> 127.0.0.1:8080 -> Apache no-root -> Flutter y /api/
 puertos. Apache conserva cookie /auth -> /api/auth, fallback SPA y no-store.
 Se mantienen las IPs del contrato validado: Apache 172.30.237.10, backend .11,
 gateway confiable 172.30.237.1. Confirmar ausencia de solapamiento y el salto real.
+
+## Primer corte demo limpio (modo actual)
+
+Ver [FIRST_DEPLOY_DEMO.md](docs/FIRST_DEPLOY_DEMO.md) para los comandos completos
+preparados para Debian sin Codex. init_demo_env.py genera .env privado sin
+sobrescribirlo; first_deploy_demo.sh valida todo antes del corte y admite
+--check y --reset-demo-data. Solo ese flag permite descartar datos demo.
+No se crea administrador automáticamente.
 
 ## Preparar en PC
 
@@ -56,18 +65,18 @@ con archivo externo: export RUNTIME_ENV_FILE="$CORRESPONDENCIA_ENV_FILE" y
 docker compose --env-file "$CORRESPONDENCIA_ENV_FILE" ... .
 No imprimir docker compose config completo con secretos; usar config --quiet.
 
-Confirmar en el servidor los volúmenes ANTES de operar:
-- correspondencia_sipe_sipe_postgres_data
-- correspondencia_sipe_sipe_backend_storage
+Dos modos explícitos:
+- INSTALL_MODE=demo (actual): correspondencia_demo_postgres_data y
+  correspondencia_demo_backend_storage, nuevos y administrados por este proyecto.
+- INSTALL_MODE=adopt (futuro): volúmenes históricos externos confirmados,
+  docker-compose.adopt.yml y nombres exactos en .env.
 
-external:true impide crear volúmenes alternativos silenciosamente. No se hace
-chown automático de storage: debe ser accesible por UID/GID 10001.
-Si otro proyecto/contenedor ya utiliza el volumen PostgreSQL, preflight se
-detiene: inspeccionar y adoptar el proyecto existente en una fase autorizada.
-Nunca iniciar un segundo PostgreSQL sobre el mismo volumen.
+El primer deploy limpio no necesita adoptar los históricos. No arrancar un
+segundo PostgreSQL sobre el mismo volumen. No se hace chown automático de datos
+existentes. Los scripts de actualización mantienen backup y verifican propiedad.
 No versionar datos, entorno real, credenciales, dumps ni backups.
 
-## Flujo futuro en servidor (NO ejecutado por preparar)
+## Actualizaciones posteriores al primer corte
 
 ```sh
 git pull --ff-only

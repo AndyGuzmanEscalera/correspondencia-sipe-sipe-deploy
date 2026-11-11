@@ -1,0 +1,9 @@
+# SOLO adopción futura: INSTALL_MODE=adopt y nombres confirmados previamente.
+# docker compose -f docker-compose.yml -f docker-compose.adopt.yml ...
+volumes:
+  postgres_data:
+    external: true
+    name: ${POSTGRES_VOLUME:?Confirme volumen PostgreSQL existente}
+  backend_storage:
+    external: true
+    name: ${STORAGE_VOLUME:?Confirme volumen storage existente}
