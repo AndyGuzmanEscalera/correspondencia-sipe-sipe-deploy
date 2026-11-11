@@ -195,7 +195,8 @@ class FirstDemo:
                                and network.get("Driver") == "bridge"
                                and bool(network.get("Internal")) == (role == "data"),
                                "La red esperada pertenece a otro proyecto o tiene configuración incompatible")
-            for entry in network.get("IPAM", {}).get("Config", []):
+            ipam = network.get("IPAM") or {}
+            for entry in ipam.get("Config") or []:
                 other = ipaddress.ip_network(entry["Subnet"])
                 if subnet.version == other.version and subnet.overlaps(other):
                     labels = network.get("Labels") or {}

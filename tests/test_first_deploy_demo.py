@@ -244,6 +244,21 @@ class FirstDemoTests(unittest.TestCase):
     def test_remote_docker_daemon_rejected(self):
         self.c.endpoint = "ssh://another-server"; self.refusal()
 
+    def test_networks_without_ipam_config_are_tolerated(self):
+        cases = (
+            ("missing_ipam", {}),
+            ("null_ipam", {"IPAM": None}),
+            ("missing_config", {"IPAM": {}}),
+            ("null_config", {"IPAM": {"Config": None}}),
+            ("empty_config", {"IPAM": {"Config": []}}),
+            ("valid_subnet", {"IPAM": {"Config": [{"Subnet": "10.241.0.0/24"}]}}),
+        )
+        for name, network in cases:
+            with self.subTest(name=name):
+                self.c.networks = {"sample": network}
+                first.FirstDemo(self.c).execute(check_only=True)
+                self.assertEqual(self.c.writes, [])
+
     def test_foreign_network_overlap_blocks_before_cut(self):
         self.c.networks["foreign"] = {"IPAM": {"Config": [{"Subnet": "172.30.237.0/24"}]}, "Labels": {}, "Driver": "bridge"}
         self.refusal()
