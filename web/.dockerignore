@@ -1,0 +1,10 @@
+**
+!Dockerfile
+!apache/
+!apache/correspondencia.conf
+!build/
+!build/**
+**/.env*
+**/.git/
+**/*.key
+**/*.pem

@@ -1,9 +1,9 @@
-# Configuración privada, datos y artefactos: nunca versionar.
+.git/
 .env
-runtime.env
-.envrc
 .env.*
 !.env.example
+runtime.env
+.envrc
 secrets/
 credentials*.json
 *.pem
@@ -13,7 +13,8 @@ credentials*.json
 id_rsa*
 id_ed25519*
 cloudflared*
-storage/
+/storage/
+/backend/storage/
 staging/
 data/
 postgres_data/
@@ -33,9 +34,7 @@ __pycache__/
 .venv/
 node_modules/
 .dart_tool/
-build/
 dist/
 website/
-rrhh/
 .DS_Store
 Thumbs.db

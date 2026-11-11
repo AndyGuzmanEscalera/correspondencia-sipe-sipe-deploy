@@ -1,27 +1,8 @@
 {
-  "format_version": 1,
-  "release": "",
-  "source_sha": "",
-  "backend_image": "ghcr.io/andyguzmanescalera/correspondencia-sipe-sipe-backend",
-  "backend_digest": "",
-  "web_image": "ghcr.io/andyguzmanescalera/correspondencia-sipe-sipe-web",
-  "web_digest": "",
-  "platform": "",
-  "validated_at": "",
-  "rollback_compatible": null,
-  "rollback_to": null,
-  "status": "draft",
-  "deploy_sha": "",
-  "database": {
-    "target_head": "n1b2c3d4e5f6",
-    "allowed_current_revisions": [],
-    "approved_pending_revisions": [],
-    "migration_required": null,
-    "plan_approved": false
-  },
-  "rollback_schema_compatibility": {
-    "approved": false,
-    "current_revisions": [],
-    "target_release": ""
-  }
+  "release": "qa-d2407fa2e314",
+  "source_sha": "d2407fa2e31478c458eac2b015e1c1b9a7d686c3",
+  "alembic_head": "n1b2c3d4e5f6",
+  "build_date": "2026-11-11T13:55:04.7681845+00:00",
+  "status": "validated",
+  "notes": "Runtime validado localmente: build PC, Compose build desde deploy, smoke aislado con autenticación sintética y PDFs. Sin publicación ni deploy."
 }

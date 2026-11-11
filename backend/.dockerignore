@@ -1,0 +1,15 @@
+**
+!Dockerfile
+!requirements.txt
+!requirements-biometric.txt
+!alembic.ini
+!app/
+!app/**
+!alembic/
+!alembic/**
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.env*
+**/*.pem
+**/*.key
