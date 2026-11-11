@@ -1,0 +1,109 @@
+# Solo imagenes ya construidas. No ejecutar con el release draft.
+name: correspondencia-deploy
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Defina POSTGRES_IMAGE por digest}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Defina POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Defina POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    stop_grace_period: 60s
+
+  backend:
+    image: ${BACKEND_IMAGE:?Release backend pendiente}
+    platform: ${RELEASE_PLATFORM:?Plataforma del release pendiente}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    working_dir: /app
+    # La imagen productiva debe soportar UID/GID 10001 y contener Alembic/assets.
+    user: '10001:10001'
+    env_file:
+      - path: ${RUNTIME_ENV_FILE:?Seleccione runtime.env fuera de Git}
+        format: raw
+    environment:
+      APP_VERSION: ${RELEASE_ID:?Identificador de release pendiente}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: '5432'
+      STORAGE_ROOT: /app/storage
+      PYTHONDONTWRITEBYTECODE: '1'
+    command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '172.30.237.10']
+    expose: ['8000']
+    volumes:
+      - backend_storage:/app/storage
+    networks:
+      edge:
+        ipv4_address: 172.30.237.11
+      data:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ['/tmp:rw,nosuid,nodev,size=128m']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test: [CMD, python, -B, -c, 'import json,urllib.request; d=json.load(urllib.request.urlopen("http://127.0.0.1:8000/health/database", timeout=4)); raise SystemExit(0 if d.get("status")=="ok" and d.get("database")=="connected" else 1)']
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    stop_grace_period: 30s
+
+  web:
+    image: ${WEB_IMAGE:?Release web pendiente}
+    platform: ${RELEASE_PLATFORM:?Plataforma del release pendiente}
+    pull_policy: never
+    restart: unless-stopped
+    init: true
+    user: '10001:10001'
+    # Contrato de imagen httpd: modulos proxy/rewrite/headers ya cargados;
+    # httpd.conf incluye conf/extra/correspondencia.conf y no duplica Listen.
+    command: [httpd-foreground]
+    ports: ['127.0.0.1:8080:8080']
+    volumes:
+      - ./apache/correspondencia.conf:/usr/local/apache2/conf/extra/correspondencia.conf:ro
+    networks:
+      edge:
+        ipv4_address: 172.30.237.10
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ['/tmp:rw,nosuid,nodev,size=64m']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --max-time, '4', http://127.0.0.1:8080/index.html]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    stop_grace_period: 30s
+
+networks:
+  # Confirmar que este subnet no se solapa en el servidor antes del primer uso.
+  # IP de Apache fija: Uvicorn confia solo en este proxy, nunca en '*'.
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.237.0/28
+  data:
+    internal: true
+volumes:
+  postgres_data:
+    external: true
+    name: ${POSTGRES_VOLUME:?Confirme volumen PostgreSQL existente}
+  backend_storage:
+    external: true
+    name: ${STORAGE_VOLUME:?Confirme volumen storage existente}
