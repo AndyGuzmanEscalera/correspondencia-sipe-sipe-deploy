@@ -102,7 +102,8 @@ class QA:
                 require(all(actual_env.get(k) == (str(v) if v is not None else None) for k, v in spec.get('environment', {}).items()), 'Entorno backend difiere del Compose efectivo; revisar antes de recrear')
                 require(spec.get('command', row['Config']['Cmd']) == row['Config']['Cmd'], 'Comando backend difiere del Compose efectivo')
                 require(set(row['NetworkSettings']['Networks']) == {self.config['networks'][n]['name'] for n in spec.get('networks', {})}, 'Redes backend difieren del Compose efectivo')
-            mounts = sorted((m['Type'], m.get('Name') or m.get('Source', ''), m['Destination']) for m in row['Mounts'])
+            # JSON-native entries keep live snapshots equal to persisted checkpoints.
+            mounts = sorted([m['Type'], m.get('Name') or m.get('Source', ''), m['Destination']] for m in row['Mounts'])
             require(not any('gestion' in str(m).lower() for m in mounts), 'Mount ajeno a Correspondencia')
             result[service] = {'id': row['Id'], 'started': row['State']['StartedAt'], 'image': row['Image'], 'mounts': mounts}
             if service == 'postgres':

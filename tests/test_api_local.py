@@ -199,6 +199,108 @@ class ApiLocalTests(unittest.TestCase):
             qa.catalog.assert_not_called()
             qa.dc.assert_not_called()
 
+    def real_snapshot(self):
+        """Exercise QA.snapshot itself; the previous identity fixture hid tuples."""
+        qa = m.QA.__new__(m.QA)
+        qa.config = config()
+        qa.config['services']['backend'].update(command=['uvicorn'], networks={'edge': {}})
+        qa.config['networks'] = {'edge': {'name': 'qa-edge'}}
+        def inspect(service, **kwargs):
+            return {'Id': service + '-id', 'Image': service + '-image',
+                    'Mounts': [{'Type': 'volume', 'Name': service + '-volume', 'Destination': '/data'},
+                               {'Type': 'tmpfs', 'Destination': '/tmp'}],
+                    'State': {'StartedAt': '2026-12-16T08:19:41.156337584Z'},
+                    'Config': {'Env': ['POSTGRES_DB=qa', 'POSTGRES_USER=qa_user', 'SECRET=synthetic_secret'], 'Cmd': ['uvicorn']},
+                    'NetworkSettings': {'Networks': {'qa-edge': {}}}}
+        qa.inspect = Mock(side_effect=inspect)
+        return qa.snapshot()
+
+    def test_real_snapshot_json_roundtrip_preserves_identity(self):
+        snapshot = self.real_snapshot()
+        checkpoint = json.loads(json.dumps(snapshot))
+        m.check_identity(checkpoint, snapshot)
+        self.assertEqual(snapshot, checkpoint)
+        for service in ('postgres', 'web', 'backend'):
+            self.assertTrue(all(isinstance(mount, list) for mount in snapshot[service]['mounts']))
+
+    def test_existing_tuple_snapshot_checkpoint_on_disk_remains_compatible(self):
+        snapshot = self.real_snapshot()
+        legacy = copy.deepcopy(snapshot)
+        for service in ('postgres', 'web', 'backend'):
+            legacy[service]['mounts'] = [tuple(mount) for mount in legacy[service]['mounts']]
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'checkpoint.json'
+            path.write_text(json.dumps({'before': legacy, 'sha256': 'unchanged'}))
+            original = path.read_bytes()
+            m.check_identity(json.loads(path.read_text())['before'], snapshot)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_json_checkpoint_rejects_real_identity_changes(self):
+        cases = [('postgres', 'id'), ('postgres', 'started'), ('postgres', 'image'),
+                 ('web', 'id'), ('web', 'started'), ('web', 'image'), ('backend', 'image'),
+                 ('database', 'POSTGRES_DB'), ('database', 'POSTGRES_USER')]
+        for service, field in cases:
+            with self.subTest(service=service, field=field):
+                snapshot = self.real_snapshot()
+                before = json.loads(json.dumps(snapshot))
+                snapshot[service][field] = 'changed'
+                with self.assertRaises(RuntimeError):
+                    m.check_identity(before, snapshot)
+        for service in ('postgres', 'web', 'backend'):
+            for index in (0, 1, 2):
+                with self.subTest(service=service, mount_component=index):
+                    snapshot = self.real_snapshot()
+                    before = json.loads(json.dumps(snapshot))
+                    # Lists here also allow a failing pre-fix implementation to be exercised.
+                    mounts = [list(mount) for mount in snapshot[service]['mounts']]
+                    volume_index = next(i for i, mount in enumerate(mounts) if mount[0] == 'volume')
+                    mounts[volume_index][index] = 'changed'
+                    snapshot[service]['mounts'] = mounts
+                    with self.assertRaises(RuntimeError):
+                        m.check_identity(before, snapshot)
+
+    def test_apply_and_rollback_accept_loaded_real_snapshot(self):
+        for rollback in (False, True):
+            with self.subTest(rollback=rollback), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                folder = root / 'backup'
+                (folder / 'infrastructure').mkdir(parents=True)
+                (folder / 'infrastructure' / 'docker-compose.yml').write_text('original')
+                (folder / 'compose.private.json').write_text(json.dumps(config()))
+                (folder / 'checkpoint.json').write_text(json.dumps({'before': self.real_snapshot()}))
+                (folder / 'counts.before.txt').write_text('users|3\n')
+                qa = m.QA.__new__(m.QA)
+                qa.root, qa.config = root, config()
+                qa.config['services']['backend']['ports'] = [dict(m.PORT)]
+                qa.checkpoint = Mock(return_value=(folder, json.loads((folder / 'checkpoint.json').read_text())))
+                qa.snapshot = Mock(side_effect=lambda **kw: self.real_snapshot())
+                qa.counts = Mock(return_value='users|3\n')
+                qa.dc = Mock(return_value=json.dumps(config()))
+                qa.recreate, qa.verify = Mock(), Mock()
+                with patch.object(m.socket, 'socket'), contextlib.redirect_stdout(io.StringIO()):
+                    qa.apply(folder, rollback=rollback)
+                qa.recreate.assert_called_once()
+                self.assertEqual(qa.verify.call_count, int(not rollback))
+
+    def test_verify_accepts_loaded_real_snapshot(self):
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            before = json.loads(json.dumps(self.real_snapshot()))
+            (folder / 'counts.before.txt').write_text('users|3\n')
+            qa = m.QA.__new__(m.QA)
+            qa.snapshot = Mock(side_effect=self.real_snapshot)
+            qa.inspect = Mock(return_value={'HostConfig': {'PortBindings': {'8000/tcp': [{'HostIp': '127.0.0.1', 'HostPort': '8100'}]}}})
+            qa.counts = Mock(return_value='users|3\n')
+            qa.run = Mock(return_value='LISTEN 0 4096 127.0.0.1:8100 0.0.0.0:*\n')
+            qa.dc = Mock(return_value='synthetic status\n')
+            def response(url, **kw):
+                payload = {'status': 'ok', 'database': 'connected'} if url.endswith('/database') else {'status': 'ok'}
+                stream = io.BytesIO(json.dumps(payload).encode())
+                return stream
+            with patch.object(m.urllib.request, 'urlopen', side_effect=response), contextlib.redirect_stdout(io.StringIO()):
+                qa.verify(folder, before)
+            self.assertEqual((folder / 'counts.after.txt').read_text(), 'users|3\n')
+
     def test_repo_compose_has_exact_backend_loopback_mapping(self):
         text = (ROOT / 'docker-compose.yml').read_text()
         self.assertEqual(text.count("ports: ['127.0.0.1:8100:8000']"), 1)
