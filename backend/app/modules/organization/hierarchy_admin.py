@@ -13,6 +13,7 @@ from app.modules.auth.dependencies import require_permission
 from app.modules.identity.user import User
 from app.modules.organization.position import Position
 from app.modules.organization.position_hierarchy import PositionHierarchy
+from app.modules.correspondence.document_type import DocumentType
 
 
 class HierarchyFields(BaseModel):
@@ -35,7 +36,25 @@ class CreateHierarchy(HierarchyFields):
     def clean_code(cls, value):
         if not value.strip():
             raise ValueError("Código obligatorio")
-        return value.strip().upper()
+        value = value.strip().upper()
+        if len(value) > 50:
+            raise ValueError("El código debe tener como máximo 50 caracteres.")
+        return value
+
+
+class UpdateHierarchy(HierarchyFields):
+    # Omission preserves compatibility with existing name/rank-only clients.
+    code: str | None = Field(default=None, min_length=1, max_length=50)
+
+    @field_validator("code")
+    @classmethod
+    def clean_code(cls, value):
+        if value is None or not value.strip():
+            raise ValueError("Código obligatorio")
+        value = value.strip().upper()
+        if len(value) > 50:
+            raise ValueError("El código debe tener como máximo 50 caracteres.")
+        return value
 
 
 class HierarchyResponse(HierarchyFields):
@@ -78,10 +97,17 @@ class HierarchyAdminService:
 
     def update(self, actor, id, body):
         row = self.get(id)
+        if body.code is not None:
+            if self.db.scalar(select(PositionHierarchy.id).where(
+                func.lower(PositionHierarchy.code) == body.code.lower(),
+                PositionHierarchy.id != id,
+            )):
+                raise conflict("Ya existe una jerarquía con ese código.")
+            row.code = body.code
         row.name = body.name
         row.rank = body.rank
         apply_audit(row, actor.id)
-        self.db.commit()
+        commit_or_conflict(self.db, values={"code": row.code})
         self.db.refresh(row)
         return row
 
@@ -95,6 +121,17 @@ class HierarchyAdminService:
             raise HTTPException(
                 status_code=409, detail="La jerarquía tiene cargos activos asignados."
             )
+        if not active and self.db.scalar(
+            select(DocumentType.id).where(
+                DocumentType.minimum_hierarchy_id == id,
+                DocumentType.is_active.is_(True),
+            ).limit(1)
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail="La jerarquía es el nivel mínimo de tipos documentales activos.",
+            )
+        # Inactive positions keep their FK and history; no physical deletion.
         row.is_active = active
         apply_audit(row, actor.id)
         self.db.commit()
@@ -151,7 +188,7 @@ def create_hierarchy(body: CreateHierarchy, db: DB, user: Manager):
 
 
 @router.put("/{id}", response_model=HierarchyResponse)
-def update_hierarchy(id: uuid.UUID, body: HierarchyFields, db: DB, user: Manager):
+def update_hierarchy(id: uuid.UUID, body: UpdateHierarchy, db: DB, user: Manager):
     return HierarchyAdminService(db).update(user, id, body)
 
 

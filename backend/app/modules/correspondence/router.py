@@ -2,7 +2,7 @@ import io
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -137,7 +137,17 @@ def create_correspondence(
     user: Annotated[User, Depends(get_current_user)],
     service: Annotated[CorrespondenceService, Depends(_service)],
 ) -> CorrespondenceDetail:
-    return service.create_correspondence(user, body)
+    from app.modules.correspondence.document_type import DocumentType
+    from app.modules.correspondence.initial_attachments import ALLOWED_BEHAVIORS, issue_grant
+    if body.initial_attachments:
+        doc_type = service._db.get(DocumentType, body.document_type_id)
+        if doc_type is None or doc_type.behavior not in ALLOWED_BEHAVIORS:
+            raise HTTPException(status_code=422, detail="Este tipo no admite adjuntos iniciales")
+    result = service.create_correspondence(user, body)
+    if body.initial_attachments:
+        result.initial_attachment_token = issue_grant(user.id, result.id,
+            [entry.model_dump() for entry in body.initial_attachments])
+    return result
 
 
 @router.get("", response_model=CorrespondenceListResponse)
@@ -343,11 +353,13 @@ async def upload_attachment(
     user: Annotated[User, Depends(get_current_user)],
     service: Annotated[CorrespondenceAttachmentService, Depends(_attachment_service)],
     file: UploadFile = File(...),
+    initial_token: str | None = Form(default=None),
 ) -> CorrespondenceAttachmentResponse:
     return await service.upload_attachment(
         user,
         correspondence_id,
         file,
+        initial_token=initial_token,
         active_only=True,
     )
 

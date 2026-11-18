@@ -1,0 +1,5 @@
+/correspondencia/login /login 301
+/correspondencia/consulta /consulta 301
+/consulta-publica /consulta 301
+# SPA fallback is native to Pages when there is no top-level 404.html.
+# No wildcard 200 rewrite: it would override real JS, fonts and image assets.

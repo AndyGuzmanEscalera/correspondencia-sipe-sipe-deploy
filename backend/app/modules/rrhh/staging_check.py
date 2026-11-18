@@ -11,18 +11,20 @@ from sqlalchemy import func, select, text
 
 
 def preflight(service, engine):
-    # Deliberately do not use Reader.info(): that also reads the device clock.
-    # No get_attendance/get_users/disable_device/write commands are called.
+    """Read-only check of the biometric API and the device behind it.
+
+    It never downloads attendance records, never lists users and never writes
+    anything on the device.
+    """
     with service.device_lock(engine):
-        with service.reader.session() as connection:
-            result = {"connected": True, "read_only": True, "device_id": service.config.device_id}
-            for key, method in (("model", "get_device_name"), ("serial", "get_serialnumber"),
-                                ("platform", "get_platform"), ("firmware", "get_firmware_version")):
-                result[key] = getattr(connection, method)()
-            connection.read_sizes()
-            result["users_count"] = connection.users
-            result["transport"] = service.reader.last_transport
-            return result
+        health = service.client.health()
+        device = service.client.get_device()
+        return {"api_available": health.get("status") == "ok",
+                "device_connected": bool(device.get("connected")),
+                "read_only": True, "device_id": service.config.device_id,
+                "model": device.get("device_name"), "serial": device.get("serial_number"),
+                "platform": device.get("platform"), "firmware": device.get("firmware_version"),
+                "transport": device.get("transport"), "api_url": service.config.url}
 
 
 def inspect_stored(db, source):

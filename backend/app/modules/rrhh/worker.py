@@ -42,9 +42,13 @@ def run_once(session_factory=SessionLocal, bind=engine, service_factory=Biometri
                 job.status = "running"
                 job.started_at = datetime.now(timezone.utc)
                 job_id = job.id
+                start_date = job.requested_start_date
+                end_date = job.requested_end_date
                 db.commit()
             try:
-                rows = service.download()  # Always the full historical device log.
+                # The biometric API filters server-side: only the requested range is
+                # downloaded, never the whole device history.
+                rows = service.download(start_date=start_date, end_date=end_date)
                 with session_factory() as db:
                     job = db.get(Sync, job_id)
                     job.downloaded_records = len(rows)

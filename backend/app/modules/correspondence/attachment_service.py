@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -25,6 +26,8 @@ from app.modules.correspondence.authorization import (
     require_operation,
 )
 from app.modules.identity.user import User
+
+_logger = logging.getLogger(__name__)
 
 _FILENAME_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
@@ -58,6 +61,7 @@ class CorrespondenceAttachmentService:
         correspondence_id: uuid.UUID,
         upload: UploadFile,
         *,
+        initial_token: str | None = None,
         active_only: bool = True,
     ) -> CorrespondenceAttachmentResponse:
         correspondence = self._get_correspondence_or_404(
@@ -65,10 +69,9 @@ class CorrespondenceAttachmentService:
             active_only=active_only,
             lock=True,
         )
-        require_operation(self._db, user, ATTACHMENTS_MANAGE)
-        CorrespondenceService(self._db).assert_current_unit_operator(
-            user, correspondence
-        )
+        if not initial_token:
+            require_operation(self._db, user, ATTACHMENTS_MANAGE)
+            CorrespondenceService(self._db).assert_current_unit_operator(user, correspondence)
         if correspondence.status != "ACTIVE":
             raise HTTPException(
                 status_code=422,
@@ -98,7 +101,25 @@ class CorrespondenceAttachmentService:
                 detail=f"Tipo de archivo no permitido: {mime_type}",
             )
 
+        if initial_token:
+            from app.modules.correspondence.initial_attachments import verify_grant, ALLOWED_BEHAVIORS
+            from app.modules.correspondence.document_type import DocumentType
+            doc_type = self._db.get(DocumentType, correspondence.document_type_id)
+            if correspondence.created_by_user_id != user.id or doc_type is None or doc_type.behavior not in ALLOWED_BEHAVIORS:
+                raise HTTPException(status_code=403, detail="Adjuntos iniciales no autorizados")
+            verify_grant(initial_token, user.id, correspondence.id, upload.filename, payload)
         original_filename = self._sanitize_filename(upload.filename or "archivo")
+        if initial_token:
+            existing = self._db.scalar(select(CorrespondenceAttachment).where(
+                CorrespondenceAttachment.correspondence_id == correspondence.id,
+                CorrespondenceAttachment.created_by_user_id == user.id,
+                CorrespondenceAttachment.original_filename == original_filename,
+                CorrespondenceAttachment.sha256 == hashlib.sha256(payload).hexdigest(),
+                CorrespondenceAttachment.size_bytes == len(payload),
+                CorrespondenceAttachment.is_active == True,
+            ))
+            if existing is not None:
+                return self._to_response(existing)
         attachment_id = uuid.uuid4()
         extension = Path(original_filename).suffix.lower()
         year = correspondence.created_at.year
@@ -109,6 +130,8 @@ class CorrespondenceAttachmentService:
         sha256 = hashlib.sha256(payload).hexdigest()
 
         storage = get_storage_service()
+        if storage.exists(storage_key):
+            raise HTTPException(status_code=409, detail="Storage key already exists")
         storage.put(storage_key, payload)
 
         row = CorrespondenceAttachment(
@@ -122,8 +145,20 @@ class CorrespondenceAttachmentService:
             is_active=True,
             created_by_user_id=user.id,
         )
-        self._db.add(row)
-        self._db.commit()
+        try:
+            self._db.add(row)
+            self._db.commit()
+        except Exception:
+            # Preserve the persistence error even when either cleanup fails.
+            try:
+                self._db.rollback()
+            except Exception:
+                _logger.exception("Attachment rollback failed")
+            try:
+                storage.delete(storage_key)
+            except Exception:
+                _logger.exception("Attachment storage compensation failed")
+            raise
         self._db.refresh(row)
         return self._to_response(row)
 

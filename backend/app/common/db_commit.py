@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 CONSTRAINT_VALUE_KEYS: dict[str, str] = {
     "uq_organizational_units_code_lower": "code",
     "uq_positions_code_lower": "code",
+    "uq_position_hierarchies_code_lower": "code",
     "uq_document_types_code_lower": "code",
     "document_types_code_key": "code",
     "uq_employees_document_number_lower": "document_number",
@@ -19,6 +20,7 @@ CONSTRAINT_VALUE_KEYS: dict[str, str] = {
 CONSTRAINT_MESSAGES: dict[str, str] = {
     "uq_organizational_units_code_lower": "Ya existe una unidad con el código {value}.",
     "uq_positions_code_lower": "Ya existe un cargo con el código {value}.",
+    "uq_position_hierarchies_code_lower": "Ya existe una jerarquía con el código {value}.",
     "uq_document_types_code_lower": "Ya existe un tipo de documento con el código {value}.",
     "document_types_code_key": "Ya existe un tipo de documento con el código {value}.",
     "uq_employees_document_number_lower": (

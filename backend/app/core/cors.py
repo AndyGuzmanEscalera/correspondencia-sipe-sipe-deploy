@@ -9,7 +9,7 @@ def configure_cors(app: FastAPI, settings: Settings) -> None:
     origins = settings.cors_origins_list
     origin_regex = settings.effective_cors_origin_regex
     if not (origins or origin_regex):
-        return  # Same-origin QA/production does not need CORS headers.
+        return  # Recovery proxy needs none; Pages enables an explicit origin allowlist.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,

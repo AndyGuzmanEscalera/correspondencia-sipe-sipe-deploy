@@ -44,7 +44,10 @@ def biometric_status(db: DB, user: Read):
         try:
             result = service.status()
         except HTTPException as exc:
-            exc.detail.update(connected=False, device_id=service.config.device_id)
+            # `connected` conserva el contrato previo; `api_available` y
+            # `device_connected` separan la API del dispositivo real.
+            exc.detail.update(connected=False, api_available=False, device_connected=False,
+                              device_id=service.config.device_id)
             raise
     ensure_device(db, service.config)
     device = db.get(Device, service.config.device_id)
@@ -78,8 +81,9 @@ def enqueue_sync(payload: DateRange, db: DB, user: Manage):
         detail = problem("biometric_sync_in_progress", "Ya existe una sincronización pendiente o en progreso.", 409)
         detail.detail["sync_id"] = str(active.id) if active else None
         raise detail from None
-    return {**sync_output(job), "full_history_download": True,
-            "message": "Solicitud en cola. Se descargará todo el histórico y se conservará en PostgreSQL."}
+    return {**sync_output(job), "full_history_download": False,
+            "message": "Solicitud en cola. Se descargarán las marcaciones del período "
+                       "solicitado desde la API biométrica y se conservarán en PostgreSQL."}
 
 
 @router.get("/biometric/syncs/latest")

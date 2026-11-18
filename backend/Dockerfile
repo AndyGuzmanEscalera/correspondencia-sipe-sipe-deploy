@@ -1,6 +1,6 @@
 FROM python:3.12-slim-bookworm
-ARG SOURCE_REVISION=d2407fa2e31478c458eac2b015e1c1b9a7d686c3
-ARG RELEASE_VERSION=qa-d2407fa2e314
+ARG SOURCE_REVISION=5989c415243c8c7d9a7f75a4b922b99974d84a44
+ARG RELEASE_VERSION=qa-5989c415243c
 LABEL org.opencontainers.image.source="https://github.com/AndyGuzmanEscalera/correspondencia-sipe-sipe" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       org.opencontainers.image.version="${RELEASE_VERSION}"

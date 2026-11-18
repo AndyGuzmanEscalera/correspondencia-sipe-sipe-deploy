@@ -66,7 +66,14 @@ class InstitutionalMayorResponse(BaseModel):
     para_label: str
 
 
+class InitialAttachment(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    size: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
 class CreateCorrespondenceRequest(BaseModel):
+    initial_attachments: list[InitialAttachment] = Field(default_factory=list, max_length=50)
     enable_public_tracking: bool = False
     emission_date: date | None = None
     emission_time: time | None = None
@@ -144,6 +151,7 @@ class CorrespondenceSentCountResponse(BaseModel):
 
 
 class CorrespondenceDetail(CorrespondenceListItem):
+    initial_attachment_token: str | None = None
     emission_date: date | None = None
     emission_time: time | None = None
     page_count: int | None = None

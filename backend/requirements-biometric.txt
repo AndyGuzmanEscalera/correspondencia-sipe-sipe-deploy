@@ -1,3 +1,6 @@
-pyzk==0.9
+# Runtime dependency for the HTTPS biometric API client.
+httpx==0.28.1
 python-dotenv==1.2.1
+# Retired direct-device path (reader reference / loopback protocol tests only).
+pyzk==0.9
 future==1.0.0

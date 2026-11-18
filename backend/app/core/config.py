@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     @property
     def effective_cors_origin_regex(self) -> str | None:
-        """DEV is loopback-only; QA/PROD need no CORS with Apache /api."""
+        """DEV is loopback-only; Pages uses explicit HTTPS origins in QA/PROD."""
         if self.app_env.lower() == "development":
             return r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
         return self.cors_allow_origin_regex.strip() or None

@@ -106,6 +106,8 @@ class PositionAdminService:
         row = self._get_or_404(position_id)
         if not is_active and row.is_active:
             validate_deletion(self._db, 'positions', row)
+        if is_active and not row.is_active:
+            self._validate_hierarchy(row.hierarchy_id)
         row.is_active = is_active
         apply_audit(row, actor.id)
         self._db.commit()

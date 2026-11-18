@@ -1,7 +1,19 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+class CodeRequest(BaseModel):
+    @field_validator("code", check_fields=False)
+    @classmethod
+    def normalize_required_code(cls, value: str) -> str:
+        value = value.strip().upper()
+        if not value:
+            raise ValueError("El código es obligatorio.")
+        if len(value) > 50:
+            raise ValueError("El código debe tener como máximo 50 caracteres.")
+        return value
 
 
 class OrganizationalUnitAdminResponse(BaseModel):
@@ -18,14 +30,14 @@ class OrganizationalUnitAdminResponse(BaseModel):
     updated_by_user_id: uuid.UUID | None
 
 
-class CreateOrganizationalUnitRequest(BaseModel):
+class CreateOrganizationalUnitRequest(CodeRequest):
     code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=300)
     parent_id: uuid.UUID | None = None
 
 
-class UpdateOrganizationalUnitRequest(BaseModel):
+class UpdateOrganizationalUnitRequest(CodeRequest):
     code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=300)
@@ -48,7 +60,7 @@ class PositionAdminResponse(BaseModel):
     updated_by_user_id: uuid.UUID | None
 
 
-class CreatePositionRequest(BaseModel):
+class CreatePositionRequest(CodeRequest):
     hierarchy_id: uuid.UUID | None = None
     code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=200)
@@ -56,7 +68,7 @@ class CreatePositionRequest(BaseModel):
     can_view_unit_correspondence: bool = False
 
 
-class UpdatePositionRequest(BaseModel):
+class UpdatePositionRequest(CodeRequest):
     hierarchy_id: uuid.UUID | None = None
     code: str = Field(min_length=1, max_length=50)
     name: str = Field(min_length=1, max_length=200)
