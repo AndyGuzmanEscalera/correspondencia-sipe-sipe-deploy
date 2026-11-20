@@ -357,7 +357,7 @@ class CorrespondenceService:
 
         origin = self._resolve_origin_fields(body, profile, user=user)
         subject = self._resolve_subject(body, profile)
-        description = self._normalize_optional_text(body.description)
+        description = None  # New documents no longer accept free-form content.
 
         recipient = None
         recipients = list_edie_first_recipients(self._db)
@@ -1223,75 +1223,8 @@ class CorrespondenceService:
                     body.origin_description
                 ),
             )
-        if is_internal_content_profile(profile):
-            self._reject_external_sender_fields(body)
-            employee = self._require_active_employee(
-                body.origin_employee_id
-                or (user.employee_id if profile != DocumentBehavior.REPORT else None)
-            )
-            return ResolvedOrigin(
-                correspondence_type=CORRESPONDENCE_TYPE_INTERNAL,
-                origin_employee_id=employee.id,
-                origin_unit_id=employee.unit_id,
-                sender_name=None,
-                sender_document=None,
-                sender_contact=None,
-                origin_description=None,
-            )
-
-        if profile == DocumentBehavior.LEGACY_CHAINING:
-            if body.correspondence_type == CORRESPONDENCE_TYPE_EXTERNAL:
-                sender_name = self._normalize_optional_text(body.sender_name)
-                if not sender_name:
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail="El nombre del remitente externo es obligatorio",
-                    )
-                return ResolvedOrigin(
-                    correspondence_type=CORRESPONDENCE_TYPE_EXTERNAL,
-                    origin_employee_id=None,
-                    origin_unit_id=None,
-                    sender_name=sender_name,
-                    sender_document=self._normalize_optional_text(body.sender_document),
-                    sender_contact=self._normalize_optional_text(body.sender_contact),
-                    origin_description=self._normalize_optional_text(
-                        body.origin_description
-                    ),
-                )
-
-            employee = self._require_active_employee(body.origin_employee_id)
-            return ResolvedOrigin(
-                correspondence_type=CORRESPONDENCE_TYPE_INTERNAL,
-                origin_employee_id=employee.id,
-                origin_unit_id=employee.unit_id,
-                sender_name=None,
-                sender_document=None,
-                sender_contact=None,
-                origin_description=None,
-            )
-
-        # Perfil genérico: conservar comportamiento previo simplificado.
-        if body.correspondence_type == CORRESPONDENCE_TYPE_EXTERNAL:
-            sender_name = self._normalize_optional_text(body.sender_name)
-            if not sender_name:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="sender_name es obligatorio para correspondencia externa",
-                )
-            return ResolvedOrigin(
-                correspondence_type=CORRESPONDENCE_TYPE_EXTERNAL,
-                origin_employee_id=None,
-                origin_unit_id=None,
-                sender_name=sender_name,
-                sender_document=self._normalize_optional_text(body.sender_document),
-                sender_contact=self._normalize_optional_text(body.sender_contact),
-                origin_description=self._normalize_optional_text(
-                    body.origin_description
-                ),
-            )
-
-        employee_id = body.origin_employee_id or user.employee_id
-        employee = self._require_active_employee(employee_id)
+        # Only new non-route documents use the authenticated actor as origin.
+        employee = self._require_active_employee(user.employee_id)
         return ResolvedOrigin(
             correspondence_type=CORRESPONDENCE_TYPE_INTERNAL,
             origin_employee_id=employee.id,
@@ -1311,23 +1244,8 @@ class CorrespondenceService:
         description = self._normalize_optional_text(body.description)
         reference = self._normalize_optional_text(body.reference)
 
-        if is_internal_content_profile(profile):
-            if not description:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="La descripción es obligatoria para este tipo de documento",
-                )
-            if profile in {
-                DocumentBehavior.INTERNAL_COMMUNICATION,
-                DocumentBehavior.MEMORANDUM,
-                DocumentBehavior.CIRCULAR,
-            } and not (subject or reference):
-                raise HTTPException(
-                    status_code=422, detail="El asunto o la referencia es obligatorio"
-                )
-            if subject or reference:
-                return (subject or reference)[:500]
-            return description[:500]
+        if profile != DocumentBehavior.ROUTE_SHEET:
+            return reference or ""
 
         if profile in {DocumentBehavior.ROUTE_SHEET, DocumentBehavior.LEGACY_CHAINING}:
             if subject:

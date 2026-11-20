@@ -99,8 +99,12 @@ class PublicTrackingService:
             Correspondence.is_active.is_(True), Correspondence.deleted_at.is_(None),
         ))
         snapshot = (row.document_snapshot or {}) if row else {}
-        if not (valid and row and row.correspondence_type == "EXTERNAL"
-                and row.origin_employee_id is None and snapshot.get("behavior") == "ROUTE_SHEET"):
+        from app.modules.correspondence.document_type import DocumentType
+        doc_type = self.db.get(DocumentType, row.document_type_id) if row else None
+        behavior = snapshot.get("behavior") or (doc_type.behavior if doc_type else None)
+        if not (valid and row and behavior in {
+            "ROUTE_SHEET", "INTERNAL_COMMUNICATION", "REPORT", "MEMORANDUM", "CIRCULAR"
+        }):
             return NOT_FOUND
         movements = self.db.scalars(select(CorrespondenceMovement).where(
             CorrespondenceMovement.correspondence_id == row.id,

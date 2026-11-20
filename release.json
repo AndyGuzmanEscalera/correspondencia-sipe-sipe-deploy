@@ -1,8 +1,8 @@
 {
-  "release": "qa-5989c415243c",
-  "source_sha": "5989c415243c8c7d9a7f75a4b922b99974d84a44",
+  "release": "qa-f67f01c9149c",
+  "source_sha": "f67f01c9149ca094da11e4838988d5c91768a754",
   "alembic_head": "n1b2c3d4e5f6",
-  "build_date": "2026-11-18T20:53:31.1148336+00:00",
+  "build_date": "2026-11-20T20:13:54.1230186+00:00",
   "status": "validated",
-  "notes": "Runtime validado localmente: build PC, Compose build desde deploy, smoke aislado con autenticación sintética y PDFs. Sin publicación ni deploy."
+  "notes": "Runtime validado localmente: empaquetado desde source SHA, 105 tests deploy, Compose config/build y smoke aislado. Sin deploy."
 }

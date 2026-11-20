@@ -11,5 +11,3 @@ def validate_route_sheet(body):
         )
     if not (body.reference or "").strip():
         raise HTTPException(422, "La referencia es obligatoria para Hoja de Ruta")
-    if not (body.description or "").strip():
-        raise HTTPException(422, "El contenido es obligatorio para Hoja de Ruta")
